@@ -1,23 +1,29 @@
-# Data
-data/
-*.csv
-*.parquet
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfvars
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
 
 # Python
 __pycache__/
-*.py[cod]
-*$py.class
+*.pyc
 .venv/
 venv/
-.env
 
-# Terraform
-.terraform/
-*.tfstate
-*.tfstate.backup
-.terraform.lock.hcl
+# Jupyter
+.ipynb_checkpoints/
 
-# IDE
+# Data files (never commit raw datasets)
+*.csv
+*.parquet
+data/
+
+# OS / editor
+.DS_Store
 .vscode/
 .idea/
-.DS_Store
