@@ -14,8 +14,9 @@ Tables/Auto Loader + Terraform + CI/CD).
 ## Status
 
 - [x] Local exploration and feature engineering (pandas) — see `docs/feature_engineering.md`
-- [ ] Infrastructure as Code (Terraform: S3, IAM, Glue Data Catalog)
-- [ ] Raw data ingestion to S3
+- [x] Infrastructure as Code (Terraform: S3, IAM, Glue Data Catalog, Glue Crawler)
+- [x] Raw data ingestion to S3
+- [x] Schema discovery (Glue Crawler) + verification (Athena) — see `docs/aws_setup.md`
 - [ ] Bronze → Silver → Gold transformation on Databricks (Delta Live Tables, Auto Loader)
 - [ ] Data quality checks
 - [ ] Orchestration (Airflow / Databricks Workflows)
@@ -40,3 +41,4 @@ tests/            unit and integration tests
 ## Documentation
 
 - [Feature engineering decisions](docs/feature_engineering.md)
+- [AWS setup: infra, ingestion, schema discovery](docs/aws_setup.md)
