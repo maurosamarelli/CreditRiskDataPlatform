@@ -17,7 +17,8 @@ Tables/Auto Loader + Terraform + CI/CD).
 - [x] Infrastructure as Code (Terraform: S3, IAM, Glue Data Catalog, Glue Crawler)
 - [x] Raw data ingestion to S3
 - [x] Schema discovery (Glue Crawler) + verification (Athena) — see `docs/aws_setup.md`
-- [ ] Bronze → Silver → Gold transformation on Databricks (Delta Live Tables, Auto Loader)
+- [x] Databricks connected to S3, both raw datasets read into Spark — see `docs/databricks_setup.md`
+- [ ] Bronze → Silver → Gold transformation on Databricks (PySpark; Delta Live Tables/Auto Loader deferred — not available on Community Edition)
 - [ ] Data quality checks
 - [ ] Orchestration (Airflow / Databricks Workflows)
 - [ ] Model training + MLflow tracking (two variants, see `docs/feature_engineering.md` §6)
@@ -42,3 +43,4 @@ tests/            unit and integration tests
 
 - [Feature engineering decisions](docs/feature_engineering.md)
 - [AWS setup: infra, ingestion, schema discovery](docs/aws_setup.md)
+- [Databricks setup: Community Edition limitations and workarounds](docs/databricks_setup.md)
