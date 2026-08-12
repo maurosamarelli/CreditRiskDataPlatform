@@ -4,7 +4,7 @@
 # SETUP — AWS credentials via Databricks Secrets
 # Community Edition workaround: fs.s3a.* is blocked on serverless
 # compute (Spark Connect), so boto3 is used instead of native
-# spark.read on S3. See docs/databricks_setup.md for details.
+# spark.read on S3. See docs/databricks_setup.md for details..
 # Secrets (not widgets!) are used so credentials are never
 # serialized into the notebook file when committed to Git.
 # ============================================================
@@ -55,3 +55,16 @@ df_lc = spark.read.option("header", "true").option("inferSchema", "true").csv(lo
 
 print(f"Rows: {df_lc.count()}")
 print(f"Columns: {len(df_lc.columns)}")
+
+# COMMAND ----------
+
+# ============================================================
+# Convert to Parquet once — CSV is row-based and non-splittable,
+# forcing Spark to parse every row even with pushed-down filters
+# (see explain() output: Format: CSV, Batched: false). Parquet
+# is columnar with embedded statistics, letting Spark skip
+# irrelevant data instead of scanning row by row.
+# ============================================================
+df_lc.write.mode("overwrite").parquet("/Workspace/lending_club_parquet")
+
+print("Lending Club converted to Parquet")

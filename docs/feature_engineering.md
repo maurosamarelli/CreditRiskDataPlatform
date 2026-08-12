@@ -33,6 +33,19 @@ target measures the loan's definitive failure (Charged Off/Default). Both
 measure credit risk but at different severity levels. This is a documented
 limitation of the unified model, not treated as an exact equivalence.
 
+**Correction found while porting to PySpark**: the original leakage list
+(built during the local pandas exploration, see §3) caught the `_inv`
+variants (`out_prncp_inv`, `total_pymnt_inv`) but missed their non-`_inv`
+counterparts (`out_prncp`, `total_pymnt`), plus `recoveries` and
+`last_pymnt_d` — all of which are also post-origination fields and equally
+leak the outcome. These survived the local pandas pass because they
+weren't caught by the missing-value or near-constant filters (they're
+populated for every resolved loan, just not knowable at application
+time). Caught and dropped during the Spark port (see
+`docs/databricks_setup.md` §7) — the local pandas feature set built
+earlier in this project carries the same gap and should be corrected if
+reused.
+
 ## 3. Feature reduction pipeline (91 → 38 columns)
 
 | Stage | Columns | What was removed | Why |
