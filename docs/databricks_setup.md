@@ -58,12 +58,15 @@ Community Edition in this project: after a blocked push (see §6, secret
 exposure), the Git panel repeatedly showed "No changed files" even after
 edits, and no standalone "Push" action was available in the branch menu
 (only Merge branch / Rebase branch / Remote branch history / Reset hard).
-Deleting and recreating the Git folder connection didn't reliably fix it.
 
-**Workaround used**: notebooks are edited and tested in the Databricks UI,
-then exported (File → Export → Source File) and committed/pushed from the
-local machine using the same Git workflow already used for `infra/` and
-`docs/`.
+**Resolution**: deleting the Git folder entirely and re-cloning from
+scratch eventually fixed it — verified with an isolated test (a trivial
+edit to an existing file, checked for detection in the Git panel) before
+trusting it enough to commit real work again. Until that was confirmed,
+notebooks were exported (File → Export → Source File) and
+committed/pushed from the local machine using the same Git workflow
+already used for `infra/` and `docs/` — a viable fallback that was used
+for one round of commits.
 
 **Why this isn't just a workaround — it's closer to how production teams
 actually work**: enterprise Databricks usage generally does **not** rely
@@ -277,6 +280,77 @@ additional_leakage = ["out_prncp", "total_pymnt", "recoveries", "last_pymnt_d"]
 df_lc_resolved = df_lc_resolved.drop(*[c for c in additional_leakage if c in df_lc_resolved.columns])
 ```
 
+## 8. Writing the Silver layer — S3 write restriction and the pandas fallback
+
+Direct Delta write from Spark to S3 (`df.write.format("delta").save("s3a://...")`)
+failed with `CloudAccessDeniedException` (403 Forbidden). Root cause: the
+boto3 credentials (via Secrets) authenticate boto3 itself, not Spark —
+Spark has no valid S3 credentials on this compute (same underlying gap as
+the `fs.s3a.*` config restriction in §3, just surfacing differently here
+since Spark did attempt the call rather than rejecting it outright).
+
+**Fallback used** (same boto3 pattern as reading raw data): materialize
+to pandas, write Parquet locally to `/Workspace`, then `s3.upload_file()`.
+
+```python
+pdf_silver = df_lc_resolved.toPandas()
+pdf_silver.attrs.clear()  # see note below — required on Spark Connect
+pdf_silver.to_parquet("/Workspace/lc_silver.parquet")
+s3.upload_file("/Workspace/lc_silver.parquet", silver_bucket, "lending_club/lending_club_silver.parquet")
+```
+
+**Extra Spark Connect quirk hit here**: `pdf.to_parquet()` initially failed
+with `TypeError: Object of type PlanMetrics is not JSON serializable`.
+Spark Connect attaches non-serializable query-plan metadata to
+`.attrs` on the pandas DataFrame returned by `.toPandas()`; `to_parquet()`
+tries to serialize `.attrs` into the file metadata and fails on it.
+Fix: `pdf.attrs.clear()` before writing.
+
+**Result**: this loses Delta's actual format (transaction log, ACID,
+time travel) — the Silver layer is plain Parquet, not Delta. Documented
+as a further consequence of the same Community Edition limitations
+already noted for Delta Live Tables/Auto Loader/Unity Catalog.
+
+## 9. Cell-execution-order bug — a concrete lesson on notebook state
+
+While finalizing the Silver write, the output column count kept coming
+back wrong (47 instead of the expected 43) across several attempts, even
+after re-running what looked like the correct fix cell. Root cause: in an
+interactive notebook, re-running cells out of their written order (or
+re-running an earlier cell after a later one) means the Python variable
+(`df_lc_resolved`) reflects whatever sequence of cells actually executed,
+not the order they appear in the file. Two different fixes (additional
+leakage removal, near-constant removal) had each been applied in
+isolation in earlier cells, but a later re-run of an intermediate step
+silently reset progress made by one of them.
+
+**Diagnosis approach that worked**: rather than guessing, printing
+`sorted(df.columns)` and diffing it against the known-correct 43-column
+list pinpointed exactly which 4 columns were still incorrectly present —
+faster than re-checking each transformation step's logic, since the logic
+itself was already correct and the bug was purely about execution order.
+
+**Practical fix**: once diagnosed, all remaining fixes and the final
+write were combined into a single cell, run start-to-finish in one
+execution, removing any ambiguity from interleaved cell runs.
+
+**Takeaway for the interview**: this is a real, common notebook
+pitfall — interactive execution order and file order can silently
+diverge. It's part of why production pipelines don't run as long-lived
+interactive notebooks: a script executed top-to-bottom as a whole (via
+`databricks bundle` / a scheduled job) doesn't have this failure mode.
+
+## Results — final Silver layer
+
+- **Lending Club Silver**: 1,303,637 rows × 43 columns, written to
+  `s3://credit-risk-platform-silver-385ac098/lending_club/lending_club_silver.parquet`
+- **GMSC Silver**: 150,000 rows × 11 columns (index column dropped,
+  `SeriousDlqin2yrs` renamed to `target` for consistency with the Lending
+  Club target naming), written to
+  `s3://credit-risk-platform-silver-385ac098/gmsc/gmsc_silver.parquet`
+- Both written as plain Parquet (not Delta — see §8) via the pandas/boto3
+  fallback pattern
+
 ## Current status
 
 - [x] Community Edition connected to S3 (via boto3 workaround, now using
@@ -291,6 +365,9 @@ df_lc_resolved = df_lc_resolved.drop(*[c for c in additional_leakage if c in df_
 - [x] Correlation-based dedup via `pyspark.ml.stat.Correlation` (single
   distributed pass, much faster than a per-pair loop)
 - [x] Family-based selection (pure column drops, fast)
-- [ ] Write Silver layer (Delta format) back to S3
+- [x] Silver layer written for both LCLD and GMSC (Parquet, not Delta —
+  see §8)
+- [ ] Model training (two variants, with/without int_rate/term — see
+  `docs/feature_engineering.md` §6)
 - [ ] Delta Live Tables / Auto Loader / Unity Catalog — not available on
   Community Edition, deferred to a possible future AWS trial

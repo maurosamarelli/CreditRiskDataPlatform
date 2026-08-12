@@ -18,7 +18,7 @@ Tables/Auto Loader + Terraform + CI/CD).
 - [x] Raw data ingestion to S3
 - [x] Schema discovery (Glue Crawler) + verification (Athena) — see `docs/aws_setup.md`
 - [x] Databricks connected to S3, both raw datasets read into Spark — see `docs/databricks_setup.md`
-- [ ] Bronze → Silver → Gold transformation on Databricks (PySpark; Delta Live Tables/Auto Loader deferred — not available on Community Edition)
+- [x] Bronze → Silver transformation on Databricks (PySpark; Delta Live Tables/Auto Loader deferred — not available on Community Edition; Silver layer written as Parquet, not Delta, for the same reason)
 - [ ] Data quality checks
 - [ ] Orchestration (Airflow / Databricks Workflows)
 - [ ] Model training + MLflow tracking (two variants, see `docs/feature_engineering.md` §6)
